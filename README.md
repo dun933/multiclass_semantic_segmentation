@@ -2,15 +2,15 @@
 
 <p align="center"> <img src="https://github.com/gasparian/semantic_segmentation_experiments/blob/master/imgs/UNET_2x_stuttgart_01.gif" height=320 /> </p>  
 
-### Problem statement  
+### Intro  
 
-The semantic segmentation is no more than pixel-level classification and is well-known in the deep-learning community, and there are already several "state of the art" approaches to building such models. So basically we need a fully-convolutional network with some pretrained backbone for feature extraction to "map" input image with given masks (let's say, each output channel represents the individual class).  
+Semantic segmentation is no more than pixel-level classification and is well-known in the deep-learning community. There are several "state of the art" approaches for building such models. So basically we need a fully-convolutional network with some pretrained backbone for feature extraction to "map" input image with given masks (let's say, each output channel represents the individual class).  
 Here is an example of cityscapes annotation:  
 
 <p align="center"> <img src="https://github.com/gasparian/semantic_segmentation_experiments/blob/master/imgs/download (72).png" height=300 /> </p>  
 
-In this repo I wanted to show a way to train two most popular architectures - UNET and FPN (with pretty large resnext50 encoders).  
-Also, I want to give an idea of where we can use these semantic masks in the self-driving/robotics field: one of the **use cases** can be **generating "prior" for point cloud clustering** algorithms. But you can ask a question: why is semantic segmentation when in this case it's better to use panoptic/instance segmentation? Well, my answer will be: semantic segmentation models are a lot simpler to understand and train, including the computational resources consumption.  
+At this repo I want to show a way to train two most popular architectures - UNET and FPN (with pretty large `resnext50` encoders).  
+Also, I want to give an idea of where we can use these semantic masks in the self-driving/robotics field: one of the **use cases** can be **generating "prior" for point cloud clustering** algorithms. But you can ask a question: why is semantic segmentation when in this case it's better to use panoptic/instance segmentation? Well, my answer will be: semantic segmentation models are a lot simpler and faster to understand and train.  
 
 ### Unet vs Feature Pyramid Network  
 
@@ -23,7 +23,7 @@ Both UNET and FPN uses features from the different scales and I'll quote really 
  This allows the bottom-up pyramid called “backbone” to be pretty much whatever you want.  
 ...
 ```  
-Check out [the UNET paper](https://arxiv.org/pdf/1505.04597.pdf), which also gives the idea of separating instances (with borders predictions).  
+Check out [the UNET paper](https://arxiv.org/pdf/1505.04597.pdf), which also gives the idea on separating instances (with borders predictions).  
 
 <p align="center"> <img src="https://github.com/gasparian/semantic_segmentation_experiments/blob/master/imgs/1_dKPBgCdJx6zj3MpED3lcNA.png" height=384 /> </p>
 
@@ -34,7 +34,7 @@ And [this presentation](http://presentations.cocodataset.org/COCO17-Stuff-FAIR.p
 #### Models size (with default parameters and same encoders)  
 
 To get model's short summary, I prefer using [torchsummary](https://github.com/sksq96/pytorch-summary).  
-Torchsummary lib may require little hack to be able to work with FPN inplementation.  
+Torchsummary lib may require little hack to be able to work with FPN implementation.  
 Make the folowing edits into the `torchsummary.py`:  
 ```
 ...
@@ -74,13 +74,14 @@ Forward/backward pass size (MB): 4574.11
 Params size (MB): 97.61
 ```  
 
-As we can see, FPN segmentation model is a lot "lighter" (so faster to train and predict).  
+As we can see, FPN segmentation model is a lot "lighter" (so we can make larger batch size ;) ).  
 
 #### Logs  
 To monitor the training process, we can set up tensorboard (on CPU):  
 ```
 CUDA_VISIBLE_DEVICES="" tensorboard --logdir /samsung_drive/semantic_segmentation/%MDOEL_DIR%/tensorboard  
 ```  
+Logs are sending from the main training loop in `Trainer` class.  
 Here are examples of typical training process (Unet for all cityscapes classes):  
 <p align="center"> <img src="https://github.com/gasparian/semantic_segmentation_experiments/blob/master/imgs/Screenshot from 2019-11-23 17-00-33.png" height=250 />  <img src="https://github.com/gasparian/semantic_segmentation_experiments/blob/master/imgs/Screenshot from 2019-11-23 17-00-41.png" height=250 />  </p>  
 
@@ -136,17 +137,17 @@ This is a previous augmented image with random rain, light beam, and snow:
 
 <p align="center"> <img src="https://github.com/gasparian/semantic_segmentation_experiments/blob/master/imgs/download (77).png" height=320 /> </p>  
 
-Another way to use augmentations to increase model performance is to apply some "soft" **deterministic** affine transformations like flips and then average the results of the predictions (Once I read the great analogy on how a human can look at the image from different angles and better understand what is shown there).  
-This process called "test-time augmentation" or simply **TTA**. The bad thing is that we need to make predictions `N_images X N_transforms` times. Here is some visual explanation on how this works:  
+Another way to use augmentations to increase model performance is to apply some "soft" **deterministic** affine transformations like flips and then average the results of the predictions (I've read the great analogy on how a human can look at the image from different angles and better understand what is shown there).  
+This process called **test-time augmentation** or simply **TTA**. The bad thing is that we need to make predictions for each transform, which leads to larger inference time. Here is some visual explanation on how this works:  
 
 <p align="center"> <img src="https://github.com/gasparian/semantic_segmentation_experiments/blob/master/imgs/temp_TTA.png" height=350 /> </p>  
 
 *tsharpen is just (x_0^t + ... +x_i^t)/N*  
 
-I use simple arithmetic mean, but you can try, for instance, geometric mean, tsharpen and etc. Chek the code here: `/utils/TTA.py`.  
+I use simple arithmetic mean, but you can try, for instance, geometric mean, tsharpen and etc. Check the code here: `/utils/TTA.py`.  
 As the post-processing step, I detect and replace clusters of a certain area with background class, which leads to a "jitter" effect on a small and far situated masks (check out `/utils/utils.py-->DropClusters`).  
 
-### Training results  
+### Training results and weights  
 
 Here I took the best of the 40 epochs of training on 2x down-sized images (512x1024) for 2 and 8 classes and 8x down-sized images for 20 classes (to fit the batch into GPU's memory).  
 Models for 2-8 classes were trained in two stages: on smaller images at first - 256x512 and then only 2x resized - 512x1024.  
@@ -155,9 +156,9 @@ Dice metric comparison table:
 
 Classes #                     | Unet   | FPN   | Size
 :----------------------------:|:------:|:-----:|:----:
-2 classes (road segmentation) | 0.956  | 0.956 | 256x512 >> 512x1024
-8 classes (categories only)   | 0.929  | 0.931 | 256x512 >> 512x1024
-20 classes                    | 0.852  | 0.858 | 128x256  
+2 (road segmentation) | 0.956 ([weights](https://drive.google.com/open?id=1L7mYrM0oBFDvO1OxU7NOZYrNWWNUhRkR))  | 0.956 ([weights](https://drive.google.com/open?id=10XamX7t5T59evY_1OiJEJQBSAKDn8tw8)) | 256x512 >> 512x1024
+8 (categories only)   | 0.929 ([weights](https://drive.google.com/open?id=1DX5Akcu5vRGnkAcH2tljtMSPkbnWH6ZV))  | 0.931 ([weights](https://drive.google.com/open?id=13TxEjLemfjMvqBEyfmQJ3pbOgK32fQxX)) | 256x512 >> 512x1024
+20                    | 0.852 ([weights](https://drive.google.com/open?id=13NZA-zajFbMGqOsMK-1ldIipbQMHz4vo))  | 0.858 ([weights](https://drive.google.com/open?id=1_xqp5h8eUtOnv_EIQbFi3BMNG0pLLiXX)) | 128x256  
 
 8 classes:  
 
@@ -177,18 +178,20 @@ UNET   | 0.944  | 0.608      | 0.785        | **0.020** | 0.017      | **0.131**
 
 So what is interesting, that I expected to see better performance on multiclass problems by FPN architecture, but the thing is on average both UNET and FPN gives pretty close dice metric.  
 Yes, there are a couple of classes that the FPN segmentation model detects better (marked in the table), but the absolute dice metric values of such classes, are not so high.  
-But in general, if you're dealing with some generic segmentation problem with pretty large, nicely separable objects - it seems that the **FPN could be a good choice for both binary and multiclass segmentation** in terms of segmentation quality and computational effectiveness.  
 
-#### Prediction on cityscapes demo videos (Stuttgart):  
+***Summary***:  
+*In general, if you're dealing with some generic segmentation problem with pretty large, nicely separable objects - it seems that the **FPN could be a good choice for both binary and multiclass segmentation** in terms of segmentation quality and computational effectiveness, **but** at the same time I've noticed that **FPN gives more small gapes in masks** opposite to the UNET. Check out videos below:*  
 
-UNET, 2 classes: [00](https://youtu.be/dHnidGY_Lwc), [01](https://youtu.be/RURCE3K7OeA), [02](https://youtu.be/OrAe5DiYWQk).  
-FPN, 2 classes: [00](https://youtu.be/RUu6upRSi20), [01](https://youtu.be/innUjjzpQ8s), [02](https://youtu.be/cGZTEw16rQg).  
-UNET, 8 classes: [00](https://youtu.be/hmIV17M7Gf8), [01](https://youtu.be/lW43CHLNL5k), [02](https://youtu.be/a2HjDz_IMMg).  
-FPN, 8 classes: [00](https://youtu.be/7qGSZ9XypkE), [01](https://youtu.be/6PhdoajzwNQ), [02](https://youtu.be/O0_Jzrfmgqk).  
-UNET, 20 classes: [00](https://youtu.be/EpN4Jx60pXI), [01](https://youtu.be/X1Oa2x5BAkg), [02](https://youtu.be/rkm6OpPCZY0).  
-FPN, 20 classes: [00](https://youtu.be/DzyLExn0M54), [01](https://youtu.be/OJyR_4U7PV8), [02](https://youtu.be/Wez8wFR3QOY).  
+Prediction on cityscapes demo videos (Stuttgart):  
 
-I used `ffmpeg` for doing that on Linux:  
+Classes # | UNET | FPN 
+:--------:|:-----:|:-----
+2         | [00](https://youtu.be/dHnidGY_Lwc), [01](https://youtu.be/RURCE3K7OeA), [02](https://youtu.be/OrAe5DiYWQk) | [00](https://youtu.be/RUu6upRSi20), [01](https://youtu.be/innUjjzpQ8s), [02](https://youtu.be/cGZTEw16rQg)  
+8         | [00](https://youtu.be/hmIV17M7Gf8), [01](https://youtu.be/lW43CHLNL5k), [02](https://youtu.be/a2HjDz_IMMg) | [00](https://youtu.be/7qGSZ9XypkE), [01](https://youtu.be/6PhdoajzwNQ), [02](https://youtu.be/O0_Jzrfmgqk)  
+20        | [00](https://youtu.be/EpN4Jx60pXI), [01](https://youtu.be/X1Oa2x5BAkg), [02](https://youtu.be/rkm6OpPCZY0) | [00](https://youtu.be/DzyLExn0M54), [01](https://youtu.be/OJyR_4U7PV8), [02](https://youtu.be/Wez8wFR3QOY)  
+
+
+I used `ffmpeg` for making videos from images sequence on Linux:  
 ```
 ffmpeg -f image2 -framerate 20 \
        -pattern_type glob -i 'stuttgart_00_*.png' \
